@@ -193,6 +193,10 @@
                         }
 
                         /* ปรับตารางภายในให้โค้งมนและดูสะอาดตา */
+
+                        .bg-per-person { background-color: #eef7ff !important; } /* สีฟ้าอ่อนสำหรับกลุ่มต่อคน */
+                        .bg-total { background-color: #fff3e0 !important; }      /* สีส้มอ่อนสำหรับกลุ่มรวม */
+    
                         .table-rounded {
                             border-collapse: separate;
                             border-spacing: 0;
@@ -207,6 +211,8 @@
                             padding: 10px 15px; /* เพิ่มระยะห่างจากขอบ (ใช้ 10px บน/ล่าง และ 15px ซ้าย/ขวา เพื่อความโปร่ง) */
                             border: 1px solid #dee2e6; /* เส้นตารางชัดเจนทุกช่อง */
                         }
+
+
                         </style>
 
                         <div class="text-start" style="font-size: 1.1rem;">
@@ -215,45 +221,51 @@
                                 <b class="text-primary fs-2">${data.days} วัน | ${data.nights} คืน</b>
                             </div>
                             
-                            <table class="table table-bordered table-sm table-rounded" style="font-size: 1rem;">
-
-                                <thead>
+                            <table class="table table-bordered table-sm table-rounded" style="font-size: 1rem; width: 100%;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th rowspan="2" class="align-middle">รายการ</th>
+                                        <th colspan="2" class="text-center bg-per-person">ค่าเดินทาง/คน</th>
+                                        <th rowspan="2" class="align-middle text-center">จำนวนคน</th>
+                                        <th colspan="2" class="text-center bg-total">ค่าเดินทางรวม</th>
+                                        <th rowspan="2" class="align-middle text-end">รวมทั้งหมด</th>
+                                    </tr>
                                     <tr class="table-light">
-                                        <th>รายการ</th>
-                                        <th class="text-center">จำนวน</th>
-                                        <th class="text-end">เบี้ยเลี้ยง/คน</th>
-                                        <th class="text-end">ที่พัก/คน</th>
-                                        <th class="text-end">รวม/คน</th>
-                                        <th class="text-end">รวมทั้งหมด</th>
+                                        <th class="text-end bg-per-person">เบี้ยเลี้ยง/คน</th>
+                                        <th class="text-end bg-per-person">ที่พัก/คน</th>
+                                        <th class="text-end bg-total">เบี้ยเลี้ยง</th>
+                                        <th class="text-end bg-total">ที่พัก</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
                                         <td>ขรก./พรก.</td>
+                                        <td class="text-end bg-per-person">${data.perDiemStaff.toLocaleString()}</td>
+                                        <td class="text-end bg-per-person">${data.perNightStaff.toLocaleString()}</td>
                                         <td class="text-center">${data.people}</td>
-                                        <td class="text-end">${data.perDiemStaff.toLocaleString()}</td>
-                                        <td class="text-end">${data.perNightStaff.toLocaleString()}</td>
-                                        <td class="text-end">${data.perStaff.toLocaleString()}</td>
-                                        <td class="text-end">${data.staffTotal.toLocaleString()}</td>
+                                        <td class="text-end bg-total">${(data.perDiemStaff * data.people).toLocaleString()}</td>
+                                        <td class="text-end bg-total">${(data.perNightStaff * data.people).toLocaleString()}</td>
+                                        <td class="text-end fw-bold">${data.staffTotal.toLocaleString()}</td>
                                     </tr>
                                     ${data.hasDriver ? `
                                     <tr>
                                         <td>พนักงานขับรถ</td>
+                                        <td class="text-end bg-per-person">${data.perDiemDriver.toLocaleString()}</td>
+                                        <td class="text-end bg-per-person">${data.perNightDriver.toLocaleString()}</td>
                                         <td class="text-center">1</td>
-                                        <td class="text-end">${data.perDiemDriver.toLocaleString()}</td>
-                                        <td class="text-end">${data.perNightDriver.toLocaleString()}</td>
-                                        <td class="text-end">${data.perDriver.toLocaleString()}</td>
-                                        <td class="text-end">${data.driverTotal.toLocaleString()}</td>
+                                        <td class="text-end bg-total">${data.perDiemDriver.toLocaleString()}</td>
+                                        <td class="text-end bg-total">${data.perNightDriver.toLocaleString()}</td>
+                                        <td class="text-end fw-bold">${data.driverTotal.toLocaleString()}</td>
                                     </tr>` : ''}
                                     <tr>
-                                        <td colspan="5" class="text-end">ค่าน้ำมันเชื้อเพลิง</td>
-                                        <td class="text-end">${data.fuel.toLocaleString()}</td>
+                                        <td colspan="6" class="text-end">ค่าน้ำมันเชื้อเพลิง</td>
+                                        <td class="text-end fw-bold">${data.fuel.toLocaleString()}</td>
                                     </tr>
                                 </tbody>
                                 <tfoot>
                                     <tr class="fw-bold" style="background-color: #f1f5f9;">
-                                        <td colspan="5" class="text-end">ยอดรวมทั้งสิ้น</td>
-                                        <td class="text-end text-primary">${data.total.toLocaleString()} บาท</td>
+                                        <td colspan="6" class="text-end">ยอดรวมทั้งสิ้น</td>
+                                        <td class="text-end text-primary fs-5">${data.total.toLocaleString()} บาท</td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -265,7 +277,7 @@
                                     ${driverNote}
                                 </ul>
                             </div>
-                        </div>`,    
+                        </div>`,
                 confirmButtonText: 'ปิดหน้าต่าง',
                 confirmButtonColor: '#334756',
                 customClass: {
