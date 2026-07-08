@@ -48,7 +48,7 @@
 
         .btn-label {
             cursor: pointer;
-            padding: 8px 16px;
+            padding: 8px 8px;
             border-radius: 8px;
             border: 1px solid #e2e8f0;
             transition: 0.3s;
@@ -98,7 +98,7 @@
                 <div class="row mb-4">
                     <label class="section-label mb-2">จำนวนผู้เดินทาง (ขรก.
                         พรก.)</label>
-                    <div class="d-flex align-items-center gap-2"
+                    <div class="d-flex align-items-center gap-1"
                         style="flex-wrap: wrap;">
 
                         <div id="peopleContainer"
@@ -134,8 +134,8 @@
                         <label class="section-label">ค่าน้ำมัน (บาท)</label>
                         <input type="number" id="fuel"
                             class="form-control form-control-lg" value="0"
-                            oninput="calculate()">
-                    </div>
+                            oninput="calculate()"
+                            onfocus="this.select()"> </div>
                 </div>
                 <div class="live-total">
                     <small style="opacity: 0.8;">รวมทั้งสิ้น</small>
