@@ -118,7 +118,7 @@
                 <div class="p-4 position-relative"> <div
                                 class="position-absolute bottom-0 end-0 p-2 text-muted"
                                 style="font-size: 0.7rem; pointer-events: none; color: #adb5bd;">
-                                เวอร์ชั่น 1.0.1 | Ratchapon
+                                เวอร์ชั่น 1.0.3 | Ratchapon
                             </div>
                         </div>
             </div>
@@ -232,10 +232,10 @@
         });
         document.getElementById('selectedCount').textContent = selectedDates.size;
         document.getElementById('weekdayCountDisplay').textContent = w + ' วัน';
-        document.getElementById('weekdayPayDisplay').textContent = (w * 240).toLocaleString() + ' บาท';
+        document.getElementById('weekdayPayDisplay').textContent = (w * 200).toLocaleString() + ' บาท';
         document.getElementById('holidayCountDisplay').textContent = h + ' วัน';
         document.getElementById('holidayPayDisplay').textContent = (h * 420).toLocaleString() + ' บาท';
-        document.getElementById('totalPay').textContent = (w * 240 + h * 420).toLocaleString();
+        document.getElementById('totalPay').textContent = (w * 200 + h * 420).toLocaleString();
     }
 
     function updateAll() { clearSelection(); fetchHolidays(); renderGrids(); }
