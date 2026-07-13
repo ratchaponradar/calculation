@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>บันทึกการเบิกจ่าย</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+        }
+
+        .litepicker {
+            font-family: 'Prompt', sans-serif !important;
+            --litepicker-month-weekday-color: #666;
+            --litepicker-day-color: #333;
+            --litepicker-is-end-color-bg: #000;
+            --litepicker-is-start-color-bg: #000;
+            --litepicker-is-in-range-color: #f3f4f6;
+            width: 320px;
+        }
+
+        .section-title {
+            font-size: .7rem;
+            font-weight: 600;
+            letter-spacing: .08em;
+            color: #9ca3af;
+            text-transform: uppercase;
+        }
+
+        /* ===== Bootstrap 5 validation look (ใช้ required จริงของเบราว์เซอร์ + was-validated) ===== */
+        /* inputs/select ใช้ Tailwind ไม่ใช่ .form-control จึงต้องกำหนดสีขอบเองให้ตรงกับ Bootstrap */
+        .was-validated input:invalid,
+        .was-validated select:invalid {
+            border-color: #dc3545 !important;
+        }
+
+        .was-validated input:invalid:focus,
+        .was-validated select:invalid:focus {
+            border-color: #dc3545 !important;
+            box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, .25) !important;
+        }
+
+        .was-validated input:valid,
+        .was-validated select:valid {
+            border-color: #198754 !important;
+        }
+
+        .was-validated input:valid:focus,
+        .was-validated select:valid:focus {
+            border-color: #198754 !important;
+            box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, .25) !important;
+        }
+
+        .invalid-feedback,
+        .valid-feedback {
+            display: none;
+            font-size: .8rem;
+            margin-top: .25rem;
+        }
+
+        .was-validated input:invalid~.invalid-feedback,
+        .was-validated select:invalid~.invalid-feedback {
+            display: block;
+            color: #dc3545;
+        }
+
+        .was-validated input:valid~.valid-feedback,
+        .was-validated select:valid~.valid-feedback {
+            display: block;
+            color: #198754;
+        }
+
+        /* หน่วยงาน / ช่วงวันที่ / วันที่เบิกจ่าย เป็น input ที่ readonly (ควบคุมด้วย custom picker)
+           ตาม spec ของ HTML เบราว์เซอร์จะ "ยกเว้น" ไม่ตรวจ required ให้กับ input ที่ readonly
+           จึงต้องคุมสถานะแดง/เขียวด้วย class .is-invalid / .is-valid เองสำหรับ 3 ช่องนี้เท่านั้น */
+        .is-invalid {
+            border-color: #dc3545 !important;
+        }
+
+        .is-invalid:focus {
+            border-color: #dc3545 !important;
+            box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, .25) !important;
+        }
+
+        .is-valid {
+            border-color: #198754 !important;
+        }
+
+        .is-valid:focus {
+            border-color: #198754 !important;
+            box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, .25) !important;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 min-h-screen p-5">
+
+    <div class="max-w-[60rem] mx-auto bg-white p-8 rounded-3xl shadow-xl" x-data="{
+        // ---------- state ----------
+        unit: '', showUnit: false,
+        user: '', showUser: false,
+        type: '', month: 'มีนาคม', year: '2569', detail: '', showProv: false,
+        dateRange: '', picker: null, expensePicker: null, // เพิ่มตัวแปรสำหรับปฏิทินตัวที่สอง
+        open: null,
+
+        // ---------- error messages สำหรับแจ้งเตือนแบบ inline (เฉพาะ 3 ช่อง readonly ที่ native required ใช้ไม่ได้) ----------
+        errors: { unit: '', dateRange: '', expenseDate: '' },
+        submitted: false, // true หลังกดตรวจสอบข้อมูลครั้งแรก ใช้โชว์กรอบเขียว/แดงของ 3 ช่อง readonly
+
+        // ---------- จำนวนเงิน ----------
+        amount: '',
+        used: '',
+        refund: '',
+
+        // ---------- งบประมาณ / หมวดหมู่ ----------
+        budgetPlan: '', showBudget: false,
+        expenseCategory: '', showCategory: false,
+
+        // ---------- เลขอ้างอิงต่างๆ (แยกคนละตัวแปร) ----------
+        contractNo: '',   // เลขที่ใบกันเงิน
+        reduceNo: '',     // เลขลดยอด
+        docNo: '',        // เลขสารบรรณ
+        expenseDate: '',  // วันที่เบิกจ่าย
+
+        // ---------- options ----------
+        units: ['ฝบต.', 'กวศ.', 'กรม.', 'สรอ.', 'สรก.', 'สรพ.', 'สรต.', 'สรส.', 'สรม', 'สรญ.'],
+        users: ['สมชาย ใจดี', 'สมหญิง รักงาน', 'ธนาคาร ออมสิน'],
+        types: ['ค่าเช่าบ้าน', 'ค่าตอบแทนปฏิบัติงานนอกเวลา', 'ค่าโทรศัพท์', 'ค่าเดินทาง', 'ค่าไปรษณีย์', 'เบิกเงินเดือนจ้างเหมา', 'หักล้างเงินยืม'],
+        months: ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'],
+        years: ['2569', '2570', '2571', '2572', '2573'],
+        provinces: ['กรุงเทพมหานคร', 'กระบี่', 'กาญจนบุรี', 'กาฬสินธุ์', 'กำแพงเพชร', 'ขอนแก่น', 'จันทบุรี', 'ฉะเชิงเทรา', 'ชลบุรี', 'ชัยนาท', 'ชัยภูมิ', 'ชุมพร', 'เชียงราย', 'เชียงใหม่', 'ตรัง', 
+        'ตราด', 'ตาก', 'นครนายก', 'นครปฐม', 'นครพนม', 'นครราชสีมา', 'นครศรีธรรมราช', 'นครสวรรค์', 'นนทบุรี', 'นราธิวาส', 'น่าน', 'บึงกาฬ', 'บุรีรัมย์', 'ปทุมธานี', 'ประจวบคีรีขันธ์', 'ปราจีนบุรี',
+        'ปัตตานี', 'พระนครศรีอยุธยา', 'พะเยา', 'พังงา', 'พัทลุง', 'พิจิตร', 'พิษณุโลก', 'เพชรบุรี', 'เพชรบูรณ์', 'แพร่', 'พะเยา', 'ภูเก็ต', 'มหาสารคาม', 'มุกดาหาร', 'แม่ฮ่องสอน', 'ยโสธร', 'ยะลา', 
+        'ร้อยเอ็ด', 'ระนอง', 'ระยอง', 'ราชบุรี', 'ลพบุรี', 'ลำปาง', 'ลำพูน', 'เลย', 'ศรีสะเกษ', 'สกลนคร', 'สงขลา', 'สตูล', 'สมุทรปราการ', 'สมุทรสงคราม', 'สมุทรสาคร', 'สระแก้ว', 'สระบุรี', 
+        'สิงห์บุรี', 'สุโขทัย', 'สุพรรณบุรี', 'สุราษฎร์ธานี', 'สุรินทร์', 'หนองคาย', 'หนองบัวลำภู', 'อ่างทอง', 'อำนาจเจริญ', 'อุดรธานี', 'อุตรดิตถ์', 'อุทัยธานี', 'อุบลราชธานี', 'ต่างประเทศ'],
+
+        budgetPlans: ['บูรฯ', 'ยุทธฯ', 'ยุทธฯฝุ่น', 'ยุทธฯลูกเห็บ', 'บุคลากร'],
+        categories: ['ค่าเช่าบ้าน', 'ค่าใช้สอย', 'ค่าตอบแทน', 'ค่าวัสดุ', 'ค่าสาฯ', 'งบกลาง'],
+
+        // ---------- ฟังก์ชัน format ตัวเลขให้มีคอมม่า ----------
+        formatMoney(val) {
+            if (!val) return '';
+            let num = val.toString().replace(/[^0-9.]/g, '');
+            if (num === '') return '';
+            return parseFloat(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+
+        // ---------- computed ----------
+        get finalLabel() {
+            if (!this.type) return '-';
+            if (this.type === 'ค่าเดินทาง') return `เดินทางไปราชการ ${this.detail || '-'}`;
+            if (this.type === 'หักล้างเงินยืม') return `หักล้างเงินยืม ${this.detail || '-'}`;
+            let base = this.type;
+            return `${base} เดือน ${this.month} ${this.year}`;
+        },
+
+        // ---------- lifecycle ----------
+        init() {
+            // อ้างอิงตัวแปรภายนอกไว้ให้ callback ใน Litepicker รู้จักตำแหน่ง Alpine State
+            const self = this;
+            const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+
+            // 1. ปฏิทินเลือกช่วงวันที่ (DatePicker เดิม)
+            this.picker = new Litepicker({
+                element: this.$refs.datepicker,
+                singleMode: false,
+                numberOfMonths: 1,
+                numberOfColumns: 1,
+                format: 'YYYY-MM-DD',
+                lang: 'th-TH',
+                months: this.months,
+                weekdays: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
+                setup: (picker) => {
+                    picker.on('selected', (date1, date2) => {
+                        const d1 = date1.dateInstance;
+                        const d2 = date2.dateInstance;
+
+                        const day1 = d1.getDate(), month1 = thMonths[d1.getMonth()], year1 = d1.getFullYear() + 543;
+                        const day2 = d2.getDate(), month2 = thMonths[d2.getMonth()], year2 = d2.getFullYear() + 543;
+
+                        if (d1.getTime() === d2.getTime()) {
+                            self.dateRange = `${day1} ${month1} ${year1}`;
+                        } else if (month1 === month2 && year1 === year2) {
+                            self.dateRange = `${day1} - ${day2} ${month1} ${year1}`;
+                        } else {
+                            self.dateRange = `${day1} ${month1} ${year1} - ${day2} ${month2} ${year2}`;
+                        }
+                    });
+                }
+            });
+
+            // 2. ปฏิทินวันที่เบิกจ่าย (เพิ่มเข้าไปแบบสมบูรณ์)
+            this.expensePicker = new Litepicker({
+                element: this.$refs.expenseDatepicker,
+                singleMode: true,
+                numberOfMonths: 1,
+                numberOfColumns: 1,
+                lang: 'th-TH',
+                months: this.months,
+                weekdays: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'],
+                setup: (picker) => {
+                    picker.on('selected', (date) => {
+                        const d = date.dateInstance;
+                        const day = d.getDate();
+                        const month = thMonths[d.getMonth()];
+                        const year = d.getFullYear() + 543;
+                        
+                        // บันทึกค่าผลลัพธ์เป็นภาษาไทยย่อ เช่น 12 มิ.ย. 2569 เข้าสู่ state
+                        self.expenseDate = `${day} ${month} ${year}`;
+                    });
+                }
+            });
+        },
+
+        // ---------- actions ----------
+        checkForm() {
+            this.submitted = true;
+            const form = this.$refs.mainForm;
+            form.classList.add('was-validated'); // เปิดสวิตช์ Bootstrap ให้โชว์กรอบแดง/เขียวของทุก input/select ที่มี required
+
+            // หน่วยงาน / ช่วงวันที่ / วันที่เบิกจ่าย เป็น input ที่ readonly (คุมด้วย custom picker)
+            // เบราว์เซอร์จะไม่ตรวจ required ให้ ต้องเช็คเองแทน
+            this.errors.unit = this.unit ? '' : 'กรุณาเลือกหน่วยงาน';
+            this.errors.dateRange = this.dateRange ? '' : 'กรุณาเลือกช่วงวันที่';
+            this.errors.expenseDate = this.expenseDate ? '' : 'กรุณาเลือกวันที่เบิกจ่าย'; // ดักข้อมูลเพิ่มเพื่อความถูกต้อง
+
+            const manualFields = ['unit', 'dateRange', 'expenseDate'];
+            const order = ['unit', 'user', 'type', 'dateRange', 'amount', 'expenseDate', 'budgetPlan', 'expenseCategory', 'contractNo', 'reduceNo', 'docNo'];
+
+            const fieldIsInvalid = (key) => {
+                if (manualFields.includes(key)) return !!this.errors[key];
+                const ctrl = this.$refs['ctrl_' + key];
+                return ctrl ? !ctrl.checkValidity() : false;
+            };
+
+            const nativelyValid = form.checkValidity(); // ตรวจทุกช่องที่มี required แบบ native ของเบราว์เซอร์/Bootstrap
+            const manualValid = manualFields.every(key => !this.errors[key]);
+
+            if (!nativelyValid || !manualValid) {
+                // เลื่อนหน้าจอไปหาช่องที่ผิดพลาดช่องแรกตามลำดับที่กำหนดไว้
+                const firstErrorField = order.find(fieldIsInvalid);
+                if (firstErrorField) {
+                    const el = this.$refs['field_' + firstErrorField];
+                    if (el) {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+                return; // มีช่องที่ยังไม่กรอก ให้หยุดและแสดงกรอบแดง+ข้อความแทนการเปิด modal
+            }
+            new bootstrap.Modal(document.getElementById('confirmModal')).show();
+        },
+
+        saveFinal() {
+            const record = {
+                หน่วยงาน: this.unit,
+                ผู้เบิก: this.user,
+                รายการ: this.finalLabel,
+                ช่วงวันที่: this.dateRange,
+                จำนวนเงิน: this.amount,
+                ใช้ไป: this.used,
+                เงินคืน: this.refund,
+                แผนงบประมาณ: this.budgetPlan,
+                หมวดหมู่ค่าใช้จ่าย: this.expenseCategory,
+                เลขที่ใบกันเงิน: this.contractNo,
+                เลขลดยอด: this.reduceNo,
+                เลขสารบรรณ: this.docNo,
+                วันที่เบิกจ่าย: this.expenseDate
+            };
+            console.log('บันทึกข้อมูล:', record);
+        }
+     }">
+
+        <h2 class="text-xl text-center font-bold mb-6 text-gray-800">บันทึกข้อมูลการเบิกจ่าย</h2>
+
+        <form @submit.prevent="checkForm()" x-ref="mainForm" novalidate>
+
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="border border-gray-300 p-4 rounded-2xl" x-ref="field_user">
+
+                    <!-- ชื่อผู้เบิก -->
+                    <div class="relative" @click.away="showUser = false">
+                        <label class="text-md font-bold text-gray-500 mb-1 block">ชื่อผู้เบิก</label>
+                        <div class="relative">
+                            <input type="text" x-model="user" required x-ref="ctrl_user" @focus="showUser = true"
+                                class="w-full border border-gray-200 rounded-xl pl-4 pr-12 py-3 outline-none focus:ring-2 focus:ring-blue-400 transition-all bg-white"
+                                placeholder="พิมพ์หรือเลือกชื่อ...">
+                            <div class="invalid-feedback">กรุณากรอกชื่อผู้เบิก</div>
+                            <div class="valid-feedback">กรอกถูกต้อง</div>
+                        </div>
+                        <div x-show="showUser"
+                            class="absolute z-40 w-full mt-2 bg-white border border-gray-100 rounded-2xl shadow-xl p-2 max-h-48 overflow-y-auto">
+                            <template x-for="name in users.filter(i => i.toLowerCase().includes(user.toLowerCase()))">
+                                <div @click="user = name; showUser = false"
+                                    class="p-3 hover:bg-blue-50 cursor-pointer rounded-lg text-md text-gray-700">
+                                    <span x-text="name"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="border border-gray-300 p-4 rounded-2xl" x-ref="field_dateRange">
+                    <!-- ===== หมวด: ช่วงวันที่ ===== -->
+                    <label class="text-md font-bold text-gray-500 mb-1 block">ช่วงวันที่</label>
+
+                    <input x-ref="datepicker" type="text" x-model="dateRange" readonly required
+                        @click="errors.dateRange = ''"
+                        :class="submitted ? (errors.dateRange ? 'is-invalid' : 'is-valid') : ''"
+                        class="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer bg-white"
+                        placeholder="แตะเพื่อเลือกวันที่...">
+                    <div class="invalid-feedback" x-show="submitted && errors.dateRange" x-text="errors.dateRange"></div>
+                    <div class="valid-feedback" x-show="submitted && !errors.dateRange">กรอกถูกต้อง</div>
+
+                </div>
+            </div>
+
+            <div class="border border-gray-300 p-4 rounded-2xl mb-4">
+
+
+                <!-- ===== หมวด: รายละเอียดการเบิก ===== -->
+                <label class="text-md font-bold text-gray-500 mb-1 block">รายละเอียดการเบิก</label>
+
+
+                <!-- ประเภทการเบิก -->
+                <div class="relative mb-4" x-ref="field_type">
+                    <label class="text-md text-gray-500 mb-1 block font-medium">ประเภทการเบิก</label>
+                    <select x-model="type" x-ref="ctrl_type" required @change="detail = ''"
+                        class="w-full bg-white border border-gray-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-400">
+                        <option value="" disabled>-- เลือกประเภท --</option>
+                        <template x-for="t in types">
+                            <option :value="t" x-text="t"></option>
+                        </template>
+                    </select>
+                    <div class="invalid-feedback">กรุณาเลือกประเภทการเบิก</div>
+                    <div class="valid-feedback">กรอกถูกต้อง</div>
+                </div>
+
+                <!-- เดือน/ปี (กรณีทั่วไป) -->
+                <div x-show="type && type !== 'ค่าเดินทาง' && type !== 'หักล้างเงินยืม'"
+                    class="grid grid-cols-2 gap-3 mb-4">
+                    <div class="relative">
+                        <label class="text-md text-gray-500 mb-1 block font-medium">เดือน</label>
+                        <button type="button" @click="open = (open === 'm' ? null : 'm')"
+                            class="w-full bg-white border border-gray-200 p-3 rounded-xl text-left flex justify-between items-center"><span
+                                x-text="month"></span><span>▼</span></button>
+                        <div x-show="open === 'm'" @click.away="open = null"
+                            class="absolute z-30 w-full bg-white border mt-2 rounded-xl shadow-xl max-h-40 overflow-y-auto">
+                            <template x-for="m in months">
+                                <div @click="month = m; open = null" class="p-2 hover:bg-blue-50 cursor-pointer text-md"
+                                    x-text="m"></div>
+                            </template>
+                        </div>
+                    </div>
+                    <div class="relative">
+                        <label class="text-md text-gray-500 mb-1 block font-medium">ปี</label>
+                        <button type="button" @click="open = (open === 'y' ? null : 'y')"
+                            class="w-full bg-white border border-gray-200 p-3 rounded-xl text-left flex justify-between items-center"><span
+                                x-text="year"></span><span>▼</span></button>
+                        <div x-show="open === 'y'" @click.away="open = null"
+                            class="absolute z-30 w-full bg-white border mt-2 rounded-xl shadow-xl max-h-40 overflow-y-auto">
+                            <template x-for="y in years">
+                                <div @click="year = y; open = null" class="p-2 hover:bg-blue-50 cursor-pointer text-md"
+                                    x-text="y"></div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- สถานที่เดินทาง (กรณีค่าเดินทาง) -->
+                <div x-show="type === 'ค่าเดินทาง'" class="relative mb-4" @click.away="showProv = false">
+                    <label class="text-md text-gray-500 mb-1 block font-medium">สถานที่เดินทาง</label>
+                    <input type="text" x-model="detail" @focus="showProv = true" @input="showProv = true"
+                        @blur="setTimeout(() => { if (!provinces.includes(detail)) { detail = ''; } showProv = false; }, 200)"
+                        placeholder="พิมพ์เพื่อค้นหาจังหวัด..."
+                        class="w-full border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none bg-white">
+
+                    <div x-show="showProv && provinces.filter(i => i.toLowerCase().includes(detail.toLowerCase())).length > 0"
+                        class="absolute z-30 w-full bg-white border mt-1 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                        <template x-for="p in provinces.filter(i => i.toLowerCase().includes(detail.toLowerCase()))">
+                            <div @click="detail = p; showProv = false"
+                                class="p-3 hover:bg-blue-50 cursor-pointer text-md" x-text="p"></div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- รายละเอียด (กรณีหักล้างเงินยืม) -->
+                <div x-show="type === 'หักล้างเงินยืม'" class="mb-4">
+                    <label class="text-md text-gray-500 mb-1 block font-medium">รายละเอียด</label>
+                    <input type="text" x-model="detail" placeholder="พิมพ์รายละเอียด..."
+                        class="w-full border border-gray-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none bg-white">
+                </div>
+
+                <!-- สรุปรายการที่เลือก -->
+                <div>
+                    <label class="text-md text-gray-500 mb-1 block font-medium">รายการที่เลือก</label>
+                    <input type="text" :value="finalLabel" readonly
+                        class="w-full bg-gray-100 p-3 rounded-xl font-semibold text-gray-700 outline-none">
+                </div>
+
+            </div>
+
+            <div class="grid grid-cols-3 gap-4 mb-4">
+
+                <div :class="submitted ? (amount ? 'is-valid' : 'is-invalid') : ''"
+                    class="border border-gray-300 p-4 rounded-2xl bg-white" x-ref="field_amount">
+                    <label class="text-md text-gray-500 mb-1 block uppercase tracking-widest font-medium">จำนวนเงิน
+                        (บาท)</label>
+                    <input type="text" x-model="amount" required x-ref="ctrl_amount"
+                        @input="amount = amount.replace(/[^0-9.]/g, '')"
+                        @blur="amount = formatMoney(amount)" placeholder="0.00"
+                        class="w-full text-lg font-semibold text-gray-800 outline-none">
+                    <div class="invalid-feedback" x-show="submitted && !amount">กรุณากรอกจำนวนเงิน</div>
+                    <div class="valid-feedback" x-show="submitted && amount">กรอกถูกต้อง</div>
+                </div>
+
+                <div class="border border-gray-300 p-4 rounded-2xl bg-white">
+                    <label class="text-md text-gray-500 mb-1 block uppercase tracking-widest font-medium">ใช้ไป
+                        (บาท)</label>
+                    <input type="text" x-model="used" @input="used = used.replace(/[^0-9.]/g, '')"
+                        @blur="used = formatMoney(used)" placeholder="0.00"
+                        class="w-full text-lg font-semibold text-gray-800 outline-none">
+                </div>
+
+                <div class="border border-gray-300 p-4 rounded-2xl bg-white">
+                    <label class="text-md text-gray-500 mb-1 block uppercase tracking-widest font-medium">เงินคืน
+                        (บาท)</label>
+                    <input type="text" x-model="refund" @input="refund = refund.replace(/[^0-9.]/g, '')"
+                        @blur="refund = formatMoney(refund)" placeholder="0.00"
+                        class="w-full text-lg font-semibold text-gray-800 outline-none">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-4 mb-4">
+                <div class="border border-gray-300 p-4 rounded-2xl" x-ref="field_budgetPlan">
+                    <label class="text-md font-bold text-gray-500 mb-1 block">แผนงบประมาณ</label>
+                    <select x-model="budgetPlan" x-ref="ctrl_budgetPlan" required
+                        class="w-full border border-gray-300 rounded-2xl px-4 py-3 bg-white outline-none focus:ring-2 focus:ring-blue-400">
+                        <option value="" disabled>เลือกแผนงบประมาณ</option>
+                        <template x-for="item in budgetPlans">
+                            <option :value="item" x-text="item"></option>
+                        </template>
+                    </select>
+                    <div class="invalid-feedback">กรุณาเลือกแผนงบประมาณ</div>
+                    <div class="valid-feedback">กรอกถูกต้อง</div>
+                </div>
+                <div class="border border-gray-300 p-4 rounded-2xl" x-ref="field_expenseCategory">
+                    <label class="text-md font-bold text-gray-500 mb-1 block">หมวดหมู่ค่าใช้จ่าย</label>
+                    <select x-model="expenseCategory" x-ref="ctrl_expenseCategory" required
+                        class="w-full border border-gray-300 rounded-2xl px-4 py-3 bg-white outline-none focus:ring-2 focus:ring-blue-400">
+                        <option value="" disabled>เลือกหมวดหมู่...</option>
+                        <template x-for="item in categories">
+                            <option :value="item" x-text="item"></option>
+                        </template>
+                    </select>
+                    <div class="invalid-feedback">กรุณาเลือกหมวดหมู่ค่าใช้จ่าย</div>
+                    <div class="valid-feedback">กรอกถูกต้อง</div>
+                </div>
+                <div class="border border-gray-300 p-4 rounded-2xl relative" x-ref="field_unit">
+
+                    <!-- หน่วยงาน -->
+
+                    <label class="text-md font-bold text-gray-500 mb-1 block">หน่วยงาน</label>
+                    <input type="text" x-model="unit" @click="showUnit = !showUnit; errors.unit = ''" readonly
+                        placeholder="คลิกเพื่อเลือกหน่วยงาน..."
+                        :class="submitted ? (errors.unit ? 'is-invalid' : 'is-valid') : ''"
+                        class="w-full border border-gray-200 rounded-xl px-4 py-3 bg-white cursor-pointer focus:ring-2 focus:ring-blue-400 outline-none transition-all">
+                    <div class="invalid-feedback" x-show="submitted && errors.unit" x-text="errors.unit"></div>
+                    <div class="valid-feedback" x-show="submitted && !errors.unit">กรอกถูกต้อง</div>
+
+                    <div x-show="showUnit" @click.away="showUnit = false"
+                        class="absolute z-50 w-full bg-white border border-gray-200 mt-2 p-3 rounded-2xl shadow-xl">
+                        <div class="grid grid-cols-3 gap-2">
+                            <template x-for="item in units">
+                                <button type="button" @click="unit = item; showUnit = false"
+                                    class="p-3 bg-gray-50 hover:bg-black hover:text-white rounded-lg text-md font-semibold transition-all border border-gray-100"
+                                    x-text="item">
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+
+
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="border border-gray-300 p-4 rounded-2xl" x-ref="field_contractNo">
+
+                    <label class="text-md font-bold text-gray-500 mb-1 block">เลขที่ใบกันเงิน</label>
+                    <input type="text" x-model="contractNo" required x-ref="ctrl_contractNo"
+                        placeholder="ระบุเลขที่ใบกันเงิน"
+                        class="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-400 outline-none">
+                    <div class="invalid-feedback">กรุณากรอกเลขที่ใบกันเงิน</div>
+                    <div class="valid-feedback">กรอกถูกต้อง</div>
+                </div>
+                <div class="border border-gray-300 p-4 rounded-2xl" x-ref="field_reduceNo">
+                    <label class="text-md font-bold text-gray-500 mb-1 block">เลขลดยอด</label>
+                    <input type="text" x-model="reduceNo" required x-ref="ctrl_reduceNo"
+                        placeholder="ระบุเลขลดยอด"
+                        class="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-400 outline-none">
+                    <div class="invalid-feedback">กรุณากรอกเลขลดยอด</div>
+                    <div class="valid-feedback">กรอกถูกต้อง</div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="border border-gray-300 p-4 rounded-2xl" x-ref="field_docNo">
+                    <label class="text-md font-bold text-gray-500 mb-1 block">เลขสารบรรณ</label>
+                    <input type="text" x-model="docNo" required x-ref="ctrl_docNo"
+                        placeholder="ระบุเลขสารบรรณ"
+                        class="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-400 outline-none">
+                    <div class="invalid-feedback">กรุณากรอกเลขสารบรรณ</div>
+                    <div class="valid-feedback">กรอกถูกต้อง</div>
+                </div>
+                <div class="border border-gray-300 p-4 rounded-2xl" x-ref="field_expenseDate">
+                    <div class="mb-4">
+                        <label class="text-md font-bold text-gray-500 mb-1 block">วันที่เบิกจ่าย</label>
+                        <div class="relative">
+                            <input x-ref="expenseDatepicker" type="text" :value="expenseDate" readonly required
+                                @click="errors.expenseDate = ''"
+                                placeholder="เลือกวันที่..."
+                                :class="submitted ? (errors.expenseDate ? 'is-invalid' : 'is-valid') : ''"
+                                class="w-full border border-gray-200 rounded-xl px-4 py-3 bg-white cursor-pointer focus:ring-2 focus:ring-blue-400 outline-none required">
+                            <div class="absolute right-4 top-3.5 pointer-events-none">
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z">
+                                    </path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="invalid-feedback" x-show="submitted && errors.expenseDate" x-text="errors.expenseDate">123</div>
+                        <div class="valid-feedback" x-show="submitted && !errors.expenseDate">กรอกถูกต้อง</div>
+                    </div>
+
+                    
+                </div>
+            </div>
+            <button type="submit"
+                class="w-full bg-black text-white py-4 rounded-xl font-semibold hover:bg-gray-800 transition-all shadow-md">
+                ตรวจสอบข้อมูล
+            </button>
+            <div
+                                class=" bottom-0 end-0 p-2 text-muted"
+                                style="font-size: 0.7rem; pointer-events: none; color: #adb5bd;">
+                                เวอร์ชั่น 1.0.1 | Ratchapon
+                            </div>
+        </form>
+
+        <!-- ===== Modal สรุปข้อมูล ===== -->
+        <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content rounded-3xl p-3 border-0 shadow-lg">
+                    <div class="modal-body py-4">
+                        <h5 class="font-semibold mb-4 text-center">ตรวจสอบข้อมูล</h5>
+                        <div
+                            class="space-y-2 text-md text-gray-700 bg-gray-50 rounded-2xl p-4 max-h-[60vh] overflow-y-auto">
+                            <p class="flex justify-between"><span class="text-gray-400">หน่วยงาน</span> <span
+                                    class="font-semibold text-black" x-text="unit"></span></p>
+                            <p class="flex justify-between"><span class="text-gray-400">ผู้เบิก</span> <span
+                                    class="font-semibold text-black" x-text="user"></span></p>
+                            <p class="flex justify-between gap-3"><span class="text-gray-400 shrink-0">รายการ</span>
+                                <span class="font-semibold text-black text-right" x-text="finalLabel"></span>
+                            </p>
+                            <p class="flex justify-between"><span class="text-gray-400">ช่วงวันที่</span> <span
+                                    class="font-semibold text-black" x-text="dateRange"></span></p>
+                            <hr class="border-gray-200">
+                            <p class="flex justify-between"><span class="text-gray-400">จำนวนเงิน</span> <span
+                                    class="font-semibold text-black" x-text="(amount || '0.00') + ' บาท'"></span></p>
+                            <p class="flex justify-between"><span class="text-gray-400">ใช้ไป</span> <span
+                                    class="font-semibold text-black" x-text="(used || '0.00') + ' บาท'"></span></p>
+                            <p class="flex justify-between"><span class="text-gray-400">เงินคืน</span> <span
+                                    class="font-semibold text-black" x-text="(refund || '0.00') + ' บาท'"></span></p>
+                            <hr class="border-gray-200">
+                            <p class="flex justify-between"><span class="text-gray-400">แผนงบประมาณ</span> <span
+                                    class="font-semibold text-black" x-text="budgetPlan || '-'"></span></p>
+                            <p class="flex justify-between"><span class="text-gray-400">หมวดหมู่ค่าใช้จ่าย</span> <span
+                                    class="font-semibold text-black" x-text="expenseCategory || '-'"></span></p>
+                            <hr class="border-gray-200">
+                            <p class="flex justify-between"><span class="text-gray-400">เลขที่ใบกันเงิน</span> <span
+                                    class="font-semibold text-black" x-text="contractNo || '-'"></span></p>
+                            <p class="flex justify-between"><span class="text-gray-400">เลขลดยอด</span> <span
+                                    class="font-semibold text-black" x-text="reduceNo || '-'"></span></p>
+                            <p class="flex justify-between"><span class="text-gray-400">เลขสารบรรณ</span> <span
+                                    class="font-semibold text-black" x-text="docNo || '-'"></span></p>
+                            <p class="flex justify-between"><span class="text-gray-400">วันที่เบิกจ่าย</span> <span
+                                    class="font-semibold text-black" x-text="expenseDate || '-'"></span></p>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 justify-content-center gap-2">
+                        <button type="button" class="btn btn-light rounded-xl px-5"
+                            data-bs-dismiss="modal">แก้ไข</button>
+                        <button type="button" @click="saveFinal(); copyDataToExcel($data)"
+                            class="btn btn-dark rounded-xl px-5" data-bs-dismiss="modal">
+                            คัดลอก
+                        </button>
+
+                        <script>
+
+                            function copyDataToExcel(alpineData) {
+    // 1. จัดเรียงลำดับคอลัมน์ตามสเปกเป๊ะๆ 1-14 คอลัมน์
+    const dataRow = [
+        alpineData.user || '',             // คอลัมน์ 1 (ผู้เบิก)
+        alpineData.dateRange || '',        // คอลัมน์ 2 (ช่วงวันที่)
+        alpineData.finalLabel || '',       // คอลัมน์ 3 (รายการ)
+        '',                                // คอลัมน์ 4 (เว้นว่างไว้)
+        alpineData.amount || '',           // คอลัมน์ 5 (จำนวนเงิน)
+        alpineData.used || '0.00',         // คอลัมน์ 6 (ใช้ไป)
+        alpineData.refund || '0.00',       // คอลัมน์ 7 (เงินคืน)
+        alpineData.budgetPlan || '0.00',    // คอลัมน์ 8 (แผนงบประมาณ)
+        alpineData.expenseCategory || '-', // คอลัมน์ 9 (หมวดหมู่ค่าใช้จ่าย)
+        alpineData.unit || '',             // คอลัมน์ 10 (หน่วยงาน)
+        alpineData.contractNo || '-',      // คอลัมน์ 11 (เลขที่ใบกันเงิน)
+        alpineData.reduceNo || '-',        // คอลัมน์ 12 (เลขลดยอด)
+        alpineData.docNo || '-',           // คอลัมน์ 13 (เลขสารบรรณ)
+        alpineData.expenseDate || '-'      // คอลัมน์ 14 (วันที่เบิกจ่าย)
+    ];
+
+    // 2. แยกคอลัมน์ด้วยเครื่องหมาย Tab เพื่อ Excel
+    const textToCopy = dataRow.join('\t');
+
+    // 3. สั่งคัดลอกลง Clipboard พร้อมยิง SweetAlert2 แบบสวยๆ
+    navigator.clipboard.writeText(textToCopy).then(() => {
+        // ยิง SweetAlert2 แจ้งเตือนแบบไม่มีปุ่ม และปิดตัวเองอัตโนมัติ
+        Swal.fire({
+            icon: 'success',
+            title: 'คัดลอกข้อมูลสำเร็จ!',
+            text: 'นำไปกด Ctrl + V วางใน Excel ได้เลย',
+            showConfirmButton: false, // ซ่อนปุ่มยืนยันเพื่อให้ดูคลีน
+            timer: 1500,              // ปิดตัวเองใน 1.5 วินาที
+            timerProgressBar: true,   // หลอดเวลาวิ่งด้านล่าง เพิ่มความพรีเมียม
+            background: '#ffffff',     // พื้นหลังสีขาวผ่อง
+            iconColor: '#10B981',     // ปรับไอคอนติ๊กถูกให้เป็นสีเขียวละมุน (Tailwind emerald-500)
+            customClass: {
+                popup: 'rounded-2xl shadow-xl' // ลบมุม SweetAlert2 ให้เข้ากับดีไซน์ Modal ของคุณ
+            }
+        });
+    }).catch(err => {
+        // แจ้งเตือนกรณีเกิดข้อผิดพลาดในการคัดลอก
+        Swal.fire({
+            icon: 'error',
+            title: 'เกิดข้อผิดพลาด',
+            text: 'ไม่สามารถคัดลอกข้อมูลได้ กรุณาลองใหม่อีกครั้ง',
+            confirmButtonText: 'รับทราบ',
+            confirmButtonColor: '#1F2937'
+        });
+        console.error('คัดลอกล้มเหลว:', err);
+    });
+}
+                        </script>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
